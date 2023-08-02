@@ -1,0 +1,209 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+
+#pure binary test
+
+cc_library(
+    name = "lib-test",
+    srcs = ["lib/src/lib.cpp"],
+    hdrs = ["lib/include/lib.h"],
+    includes = ["lib/include"],
+    visibility = ["//:__pkg__"],
+)
+
+
+cc_binary(
+    name = "HelloWorld",
+    srcs = ["main.cpp"],
+    deps = [
+        "//:lib-test",
+    ],
+)
+
+# cmake libray
+
+load("@rules_foreign_cc//foreign_cc:defs.bzl", "cmake")
+
+filegroup(
+    name = "srcs",
+    srcs = glob(["**"]),
+    visibility = ["//visibility:public"],
+)
+
+cmake(
+    name = "lib-test-cmake",
+    lib_source = ":srcs",
+    generate_args = ["-DBAZEL_BUILD=ON"],
+    out_include_dir = "include",
+    postfix_script = """
+        echo "dump current directory"
+        echo $INSTALLDIR
+        pwd
+        ls $INSTALLDIR/include/freetype2
+
+        cp -r $INSTALLDIR/include/freetype2/* $INSTALLDIR/include/  
+        cp -r $INSTALLDIR/include/harfbuzz/* $INSTALLDIR/include/
+        echo "end dump"
+    """,
+
+    # the name of the static library != <name>.a, put it explicitly
+    out_static_libs = select({
+        # "//:windows": ["libtest-lib.lib"],
+        "//conditions:default": ["libtest-lib.a"],
+    }),
+    visibility = ["//visibility:public"],
+)
+
+cmake(
+    name = "harfbuzz",
+    lib_source = ":srcs",
+    # generate_args = ["-DBAZEL_BUILD=ON"],
+    out_include_dir = "include/harfbuzz",
+    working_directory = "harfbuzz",
+    # the name of the static library != <name>.a, put it explicitly
+    out_static_libs = select({
+        # "//:windows": ["libtest-lib.lib"],
+        "//conditions:default": ["libharfbuzz.a"],
+    }),
+    visibility = ["//visibility:public"],
+)
+
+cmake(
+    name = "freetype",
+    lib_source = ":srcs",
+    # generate_args = ["-DBAZEL_BUILD=ON"],
+    working_directory = "freetype",
+    out_include_dir = "include",
+    # the name of the static library != <name>.a, put it explicitly
+    out_static_libs = select({
+        # "//:windows": ["libtest-lib.lib"],
+        "//conditions:default": ["libfreetype.a"],
+    }),
+    visibility = ["//visibility:public"],
+)
+
+# cause we don't know how to get output library so we must edit the 
+cmake(
+    name = "lib-test-cmake-workdir",
+    lib_source = ":srcs",
+    generate_args = ["-DBAZEL_BUILD=ON"],
+    out_include_dir = "include",#????
+    working_directory = "lib",
+    # the name of the static library != <name>.a, put it explicitly
+    install = True,
+    out_lib_dir = "bin/lib",#????
+    out_static_libs = select({
+        # "//:windows": ["libtest-lib.lib"],
+        "//conditions:default": ["libtest-lib.a"],
+    }),
+    visibility = ["//visibility:public"],
+)
+
+# cmake dependcy binary
+cc_binary(
+    name = "HelloWorldCMake",
+    srcs = ["main.cpp"],
+    deps = [
+        "//:lib-test-cmake",
+        "//:freetype",
+    ],
+)
+
+# Normal xcode project
+
+load("@rules_cc//cc:defs.bzl", "objc_library")
+load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
+
+load(
+    "@rules_xcodeproj//xcodeproj:defs.bzl",
+    "top_level_target",
+    "xcode_provisioning_profile",
+    "xcodeproj",
+)
+
+
+objc_library(
+    name = "ios-appClasses",
+    srcs = [
+        "ios-app/AppDelegate.m",
+        "ios-app/UrlGetViewController.mm",
+        "ios-app/main.m",
+    ],
+    hdrs = glob(["ios-app/*.h"]),
+    deps = [
+        "//:lib-test",
+    ],
+)
+
+ios_application(
+    name = "ios-app",
+    bundle_id = "grab.iosTest",
+    families = [
+        "iphone",
+        "ipad",
+    ],
+    infoplists = [":ios-app/UrlGet-Info.plist"],
+    launch_storyboard = "ios-app/UrlGetViewController.xib",
+    minimum_os_version = "15.0",
+    provisioning_profile = "AACCDDEEFF.mobileprovision", # Uncomment and set your own profile.
+    visibility = ["//visibility:public"],
+    deps = [":ios-appClasses"],
+)
+
+xcodeproj(
+    name = "xcodeproj",
+    build_mode = "xcode",
+    minimum_xcode_version = "14",
+    project_name = "ios-app",
+    tags = ["manual"],
+    top_level_targets = [
+        top_level_target(
+            ":ios-app",
+            target_environments = ["device", "simulator"],
+        ),
+    ],
+)
+
+
+# cmake xcode project test
+
+objc_library(
+    name = "ios-appClassescmake",
+    srcs = [
+        "ios-app/AppDelegate.m",
+        "ios-app/UrlGetViewController.mm",
+        "ios-app/main.m",
+    ],
+    hdrs = glob(["ios-app/*.h"]),
+    deps = [
+        "//:lib-test-cmake",
+    ],
+)
+
+ios_application(
+    name = "ios-app-cmake",
+    bundle_id = "grab.iosTest",
+    families = [
+        "iphone",
+        "ipad",
+    ],
+    infoplists = [":ios-app/UrlGet-Info.plist"],
+    launch_storyboard = "ios-app/UrlGetViewController.xib",
+    minimum_os_version = "15.0",
+    provisioning_profile = "AACCDDEEFF.mobileprovision", # Uncomment and set your own profile.
+    visibility = ["//visibility:public"],
+    deps = [":ios-appClassescmake"],
+)
+
+xcodeproj(
+    name = "xcodeprojcmake",
+    build_mode = "xcode",
+    minimum_xcode_version = "14",
+    project_name = "ios-app-cmake",
+    tags = ["manual"],
+    top_level_targets = [
+        top_level_target(
+            ":ios-app-cmake",
+            target_environments = ["device", "simulator"],
+        ),
+    ],
+)

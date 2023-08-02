@@ -1,0 +1,6 @@
+[submodule "cmake_lib/harfbuzz"]
+	path = cmake_lib/harfbuzz
+	url = https://github.com/harfbuzz/harfbuzz.git
+[submodule "cmake_lib/freetype"]
+	path = cmake_lib/freetype
+	url = https://github.com/freetype/freetype.git
